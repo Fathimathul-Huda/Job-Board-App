@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Job Board App</title>
+  <link rel="stylesheet" href="./index.css">
+
+</head>
+<body>
+  <div class="container">
+
+    <!-- Register Form -->
+    <div id="registerDiv">
+      <h2>Register</h2>
+      <input type="text" id="regName" placeholder="Full Name">
+      <input type="email" id="regEmail" placeholder="Email">
+      <input type="password" id="regPassword" placeholder="Password">
+      <button onclick="register()">Register</button>
+      <div class="link">
+        <p>Already have an account? <a href="#" onclick="showLogin()">Login here</a></p>
+      </div>
+    </div>
+
+    <!-- Login Form -->
+    <div id="loginDiv" class="hidden">
+      <h2>Login</h2>
+      <input type="email" id="email" placeholder="Email">
+      <input type="password" id="password" placeholder="Password">
+      <button onclick="login()">Login</button>
+      <div class="link">
+        <p>Don't have an account? <a href="#" onclick="showRegister()">Register</a></p>
+      </div>
+    </div>
+
+    <!-- Dashboard -->
+    <div id="dashboardDiv" class="hidden">
+      <button onclick="logout()">Logout</button>
+      <h2>Create Job</h2>
+      <input type="text" id="title" placeholder="Job Title">
+      <input type="text" id="company" placeholder="Company">
+      <input type="text" id="location" placeholder="Location">
+      <textarea id="description" placeholder="Job Description"></textarea>
+      <button onclick="createJob()">Post Job</button>
+
+      <h2>Available Jobs</h2>
+      <div id="jobs"></div>
+    </div>
+
+  </div>
+
+  <script>
+    const API_URL = "http://localhost:3000";
+    let accessToken = null;
+
+    function showLogin() {
+      document.getElementById("registerDiv").classList.add("hidden");
+      document.getElementById("loginDiv").classList.remove("hidden");
+      document.getElementById("dashboardDiv").classList.add("hidden");
+    }
+
+    function showRegister() {
+      document.getElementById("registerDiv").classList.remove("hidden");
+      document.getElementById("loginDiv").classList.add("hidden");
+      document.getElementById("dashboardDiv").classList.add("hidden");
+    }
+
+    function showDashboard() {
+      document.getElementById("registerDiv").classList.add("hidden");
+      document.getElementById("loginDiv").classList.add("hidden");
+      document.getElementById("dashboardDiv").classList.remove("hidden");
+      loadJobs();
+    }
+
+    // REGISTER
+    async function register() {
+      const name = document.getElementById("regName").value;
+      const email = document.getElementById("regEmail").value;
+      const password = document.getElementById("regPassword").value;
+
+      const res = await fetch(`${API_URL}/auth/register`, { // ✅ correct endpoint
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, password }),
+      });
+      const data = await res.json();
+      alert(data.message);
+
+      if (res.status === 201) showLogin();
+    }
+
+    // LOGIN
+    async function login() {
+      const email = document.getElementById("email").value;
+      const password = document.getElementById("password").value;
+
+      const res = await fetch(`${API_URL}/auth/login`, { // ✅ correct endpoint
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await res.json();
+
+      if (res.ok) {
+        accessToken = data.accessToken;
+        localStorage.setItem("refreshToken", data.refreshToken);
+        showDashboard();
+      } else {
+        alert(data.message || "Login failed");
+      }
+    }
+
+    // AUTO REFRESH TOKEN
+    async function refreshAccessToken() {
+      const refreshToken = localStorage.getItem("refreshToken");
+      if (!refreshToken) return;
+
+      const res = await fetch(`${API_URL}/auth/token`, { // ✅ correct endpoint
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refreshToken }),
+      });
+      const data = await res.json();
+
+      if (res.ok) {
+        accessToken = data.accessToken;
+        showDashboard();
+      } else {
+        console.log("Refresh failed:", data.message);
+        showLogin();
+      }
+    }
+
+    // LOAD JOBS
+    async function loadJobs() {
+      const res = await fetch(`${API_URL}/job/view`); // ✅ correct endpoint
+      const jobs = await res.json();
+      const container = document.getElementById("jobs");
+      container.innerHTML = "";
+
+      jobs.forEach(j => {
+        const div = document.createElement("div");
+        div.className = "job";
+        div.innerHTML = `<h3>${j.title}</h3>
+                         <p><b>Company:</b> ${j.company}</p>
+                         <p><b>Location:</b> ${j.location}</p>
+                         <p>${j.description}</p>`;
+        container.appendChild(div);
+      });
+    }
+
+    // CREATE JOB
+    async function createJob() {
+      const title = document.getElementById("title").value;
+      const company = document.getElementById("company").value;
+      const location = document.getElementById("location").value;
+      const description = document.getElementById("description").value;
+
+      const res = await fetch(`${API_URL}/job`, { // ✅ correct endpoint
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ title, company, location, description }),
+      });
+      const data = await res.json();
+      alert(data.message);
+      loadJobs();
+    }
+
+    // LOGOUT
+    async function logout() {
+      const refreshToken = localStorage.getItem("refreshToken");
+      await fetch(`${API_URL}/auth/logout`, { // ✅ correct endpoint
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refreshToken }),
+      });
+      localStorage.removeItem("refreshToken");
+      accessToken = null;
+      showLogin();
+    }
+
+    // On page load
+    window.onload = refreshAccessToken;
+  </script>
+</body>
+</html>
