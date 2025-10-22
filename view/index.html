@@ -5,11 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Job Board App</title>
   <link rel="stylesheet" href="./index.css">
-
+  
 </head>
 <body>
   <div class="container">
-
+    
     <!-- Register Form -->
     <div id="registerDiv">
       <h2>Register</h2>
@@ -18,7 +18,7 @@
       <input type="password" id="regPassword" placeholder="Password">
       <button onclick="register()">Register</button>
       <div class="link">
-        <p>Already have an account? <a href="#" onclick="showLogin()">Login here</a></p>
+        <p>Already have an account? <a onclick="showLogin()">Login here</a></p>
       </div>
     </div>
 
@@ -29,78 +29,107 @@
       <input type="password" id="password" placeholder="Password">
       <button onclick="login()">Login</button>
       <div class="link">
-        <p>Don't have an account? <a href="#" onclick="showRegister()">Register</a></p>
+        <p>Don't have an account? <a onclick="showRegister()">Register</a></p>
       </div>
     </div>
 
     <!-- Dashboard -->
     <div id="dashboardDiv" class="hidden">
+      <h2>Dashboard</h2>
       <button onclick="logout()">Logout</button>
-      <h2>Create Job</h2>
+      <h3>Create Job</h3>
       <input type="text" id="title" placeholder="Job Title">
       <input type="text" id="company" placeholder="Company">
       <input type="text" id="location" placeholder="Location">
       <textarea id="description" placeholder="Job Description"></textarea>
       <button onclick="createJob()">Post Job</button>
-
-      <h2>Available Jobs</h2>
-      <div id="jobs"></div>
+      <br><br>
+      <button onclick="showJobs()">View Available Jobs</button>
     </div>
 
+    <!-- Jobs Page -->
+    <div id="jobsPage" class="hidden">
+      <div class="top-bar">
+        <button onclick="goBack()">⬅ Go Back</button>
+        <h2>Available Jobs</h2>
+      </div>
+      <input type="text" id="searchJob" placeholder="Search job by title" onkeyup="filterJobs()">
+      <div id="jobs"></div>
+      <div class="actions">
+        <button id="showMoreBtn" class="hidden" onclick="showMore()">Show More</button>
+        <button id="showLessBtn" class="hidden" onclick="showLess()">Show Less</button>
+      </div>
+    </div>
   </div>
 
   <script>
     const API_URL = "http://localhost:3000";
     let accessToken = null;
+    let allJobs = [];
+    let visibleCount = 4;
 
+    // Switch Functions
     function showLogin() {
       document.getElementById("registerDiv").classList.add("hidden");
       document.getElementById("loginDiv").classList.remove("hidden");
       document.getElementById("dashboardDiv").classList.add("hidden");
+      document.getElementById("jobsPage").classList.add("hidden");
     }
 
     function showRegister() {
       document.getElementById("registerDiv").classList.remove("hidden");
       document.getElementById("loginDiv").classList.add("hidden");
       document.getElementById("dashboardDiv").classList.add("hidden");
+      document.getElementById("jobsPage").classList.add("hidden");
     }
 
     function showDashboard() {
       document.getElementById("registerDiv").classList.add("hidden");
       document.getElementById("loginDiv").classList.add("hidden");
       document.getElementById("dashboardDiv").classList.remove("hidden");
+      document.getElementById("jobsPage").classList.add("hidden");
+    }
+
+    function showJobs() {
+      document.getElementById("dashboardDiv").classList.add("hidden");
+      document.getElementById("jobsPage").classList.remove("hidden");
       loadJobs();
     }
 
-    // REGISTER
+    function goBack() {
+      document.getElementById("jobsPage").classList.add("hidden");
+      document.getElementById("dashboardDiv").classList.remove("hidden");
+    }
+
+    // Register
     async function register() {
       const name = document.getElementById("regName").value;
       const email = document.getElementById("regEmail").value;
       const password = document.getElementById("regPassword").value;
 
-      const res = await fetch(`${API_URL}/auth/register`, { // ✅ correct endpoint
+      const res = await fetch(`${API_URL}/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, email, password }),
       });
+
       const data = await res.json();
       alert(data.message);
-
       if (res.status === 201) showLogin();
     }
 
-    // LOGIN
+    // Login
     async function login() {
       const email = document.getElementById("email").value;
       const password = document.getElementById("password").value;
 
-      const res = await fetch(`${API_URL}/auth/login`, { // ✅ correct endpoint
+      const res = await fetch(`${API_URL}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
-      const data = await res.json();
 
+      const data = await res.json();
       if (res.ok) {
         accessToken = data.accessToken;
         localStorage.setItem("refreshToken", data.refreshToken);
@@ -110,34 +139,19 @@
       }
     }
 
-    // AUTO REFRESH TOKEN
-    async function refreshAccessToken() {
-      const refreshToken = localStorage.getItem("refreshToken");
-      if (!refreshToken) return;
-
-      const res = await fetch(`${API_URL}/auth/token`, { // ✅ correct endpoint
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ refreshToken }),
-      });
-      const data = await res.json();
-
-      if (res.ok) {
-        accessToken = data.accessToken;
-        showDashboard();
-      } else {
-        console.log("Refresh failed:", data.message);
-        showLogin();
-      }
+    // Load Jobs
+    async function loadJobs() {
+      const res = await fetch(`${API_URL}/job/view`);
+      const jobs = await res.json();
+      allJobs = jobs;
+      visibleCount = 4;
+      displayJobs(allJobs.slice(0, visibleCount));
+      toggleButtons();
     }
 
-    // LOAD JOBS
-    async function loadJobs() {
-      const res = await fetch(`${API_URL}/job/view`); // ✅ correct endpoint
-      const jobs = await res.json();
+    function displayJobs(jobs) {
       const container = document.getElementById("jobs");
       container.innerHTML = "";
-
       jobs.forEach(j => {
         const div = document.createElement("div");
         div.className = "job";
@@ -149,14 +163,50 @@
       });
     }
 
-    // CREATE JOB
+    function filterJobs() {
+      const keyword = document.getElementById("searchJob").value.toLowerCase();
+      const filtered = allJobs.filter(j => j.title.toLowerCase().includes(keyword));
+      displayJobs(filtered.slice(0, visibleCount));
+      toggleButtons();
+    }
+
+    function showMore() {
+      visibleCount += 4;
+      displayJobs(allJobs.slice(0, visibleCount));
+      toggleButtons();
+    }
+
+    function showLess() {
+      visibleCount = 4;
+      displayJobs(allJobs.slice(0, visibleCount));
+      toggleButtons();
+    }
+
+    function toggleButtons() {
+      const showMoreBtn = document.getElementById("showMoreBtn");
+      const showLessBtn = document.getElementById("showLessBtn");
+
+      if (allJobs.length > visibleCount) {
+        showMoreBtn.classList.remove("hidden");
+      } else {
+        showMoreBtn.classList.add("hidden");
+      }
+
+      if (visibleCount > 4) {
+        showLessBtn.classList.remove("hidden");
+      } else {
+        showLessBtn.classList.add("hidden");
+      }
+    }
+
+    // Create Job
     async function createJob() {
       const title = document.getElementById("title").value;
       const company = document.getElementById("company").value;
       const location = document.getElementById("location").value;
       const description = document.getElementById("description").value;
 
-      const res = await fetch(`${API_URL}/job`, { // ✅ correct endpoint
+      const res = await fetch(`${API_URL}/job`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -164,15 +214,15 @@
         },
         body: JSON.stringify({ title, company, location, description }),
       });
+
       const data = await res.json();
       alert(data.message);
-      loadJobs();
     }
 
-    // LOGOUT
+    // Logout
     async function logout() {
       const refreshToken = localStorage.getItem("refreshToken");
-      await fetch(`${API_URL}/auth/logout`, { // ✅ correct endpoint
+      await fetch(`${API_URL}/auth/logout`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ refreshToken }),
@@ -182,8 +232,7 @@
       showLogin();
     }
 
-    // On page load
-    window.onload = refreshAccessToken;
+    window.onload = showLogin;
   </script>
 </body>
 </html>
